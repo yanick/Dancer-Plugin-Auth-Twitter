@@ -18,12 +18,17 @@ register 'twitter' => \&twitter;
 my $consumer_key;
 my $consumer_secret;
 my $callback_url;
+my $callback_success;
+my $callback_fail;
 
 register 'auth_twitter_init' => sub {
     my $config = plugin_setting;
     $consumer_secret = $config->{consumer_secret};
     $consumer_key    = $config->{consumer_key};
     $callback_url    = $config->{callback_url};
+
+    $callback_success = $config->{callback_success} || '/';
+    $callback_fail    = $config->{callback_fail}    || '/fail';
 
     for my $param (qw/consumer_key consumer_secret callback_url/) {
         croak "'$param' is expected but not found in configuration" 
@@ -93,7 +98,7 @@ get '/auth/twitter/callback' => sub {
 
     if ($@ || !$twitter_user_hash) {
         core("no twitter_user_hash or error: ".$@);
-        return redirect '/fail';
+        return redirect $callback_fail;
     }
 
     $twitter_user_hash->{'access_token'} = $access_token;
@@ -104,7 +109,7 @@ get '/auth/twitter/callback' => sub {
     session 'twitter_access_token'        => $access_token,
     session 'twitter_access_token_secret' => $access_token_secret,
 
-    redirect '/';
+    redirect $callback_success;
 };
  
 register_plugin;
@@ -164,9 +169,14 @@ C<plugins/Auth::Twitter>:
     ...
     plugins:
       "Auth::Twitter":
-        consumer_key: "1234"
-        consumer_secret: "abcd"
-        callback_url: "http://localhost:3000/auth/twitter/callback"
+        consumer_key:     "1234"
+        consumer_secret:  "abcd"
+        callback_url:     "http://localhost:3000/auth/twitter/callback"
+        callback_success: "/"
+        callback_fail:    "/fail"
+
+C<callback_success> and C<callback_fail> are optional and default to 
+'/' and '/fail', respectively.
 
 Note that you also need to provide your callback url, whose route handler is automatically
 created by the plugin.
@@ -222,8 +232,10 @@ The plugin defines the following route handler automatically:
 
 This route handler is responsible for catching back a user that has just
 authenticated herself with Twitter's OAuth. The route handler saves tokens and
-user information in the session and then redirect the user to the root URI of
-your app (C</>).
+user information in the session and then redirect the user to the URI
+specified by C<callback_success>.  If the validation of the token
+returned by Twitter, for some reason, failed, the user will be redirect
+to the URI specified by C<callback_fail>.
 
 The Twitter user can be accessed by other route handler through
 C<session('twitter_user')>.
